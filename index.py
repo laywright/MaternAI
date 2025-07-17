@@ -1,4 +1,3 @@
-# app.py (Simplified NexusFlow Neonatal Predictor)
 
 import streamlit as st
 import pandas as pd
