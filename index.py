@@ -1,4 +1,4 @@
-# app.py
+# app.py - Final Corrected Version
 
 import streamlit as st
 import pandas as pd
@@ -6,10 +6,17 @@ import numpy as np
 import joblib
 import plotly.express as px
 from sklearn.exceptions import NotFittedError
+import os
+from datetime import datetime
 
 # === CONFIG ===
 APP_TITLE = "NexusFlow | Neonatal Risk Predictor"
 APP_VERSION = "2.3"
+MODEL_FILES = {
+    "model": "model_rf.pkl",
+    "scaler": "scaler.pkl",
+    "encoder": "label_encoder.pkl"
+}
 
 # === 🎨 UI CONFIG ===
 st.set_page_config(page_title=APP_TITLE, layout="wide", page_icon="👶")
@@ -26,130 +33,157 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# === Load Assets ===
+# === Model Loading ===
 @st.cache_resource
 def load_model_assets():
+    """Load all required model files with error handling"""
     try:
-        model = joblib.load("model_rf.pkl")
-        scaler = joblib.load("scaler.pkl")
-        label_encoder = joblib.load("label_encoder.pkl")
-        column_order = joblib.load("columns.pkl")
-        return model, scaler, label_encoder, column_order
-    except FileNotFoundError as e:
-        st.error(f"Required model asset not found: {str(e)}")
-        st.stop()
+        # Verify files exist
+        missing_files = [name for name, path in MODEL_FILES.items() if not os.path.exists(path)]
+        if missing_files:
+            raise FileNotFoundError(f"Missing files: {', '.join(missing_files)}")
+        
+        model = joblib.load(MODEL_FILES["model"])
+        scaler = joblib.load(MODEL_FILES["scaler"])
+        encoder = joblib.load(MODEL_FILES["encoder"])
+        
+        # Verify model has expected features
+        if not hasattr(model, 'feature_names_in_'):
+            raise AttributeError("Model missing feature names information")
+            
+        return model, scaler, encoder
+        
     except Exception as e:
-        st.error(f"Unexpected error loading model assets: {str(e)}")
+        st.error(f"❌ Error loading model assets: {str(e)}")
+        st.error("Please ensure these files exist in your directory:")
+        st.error("\n".join(f"- {path}" for path in MODEL_FILES.values()))
         st.stop()
 
-# === Predict Function ===
-def predict_birth_weight(model, scaler, label_encoder, data, column_order):
+# === Prediction Function ===
+def predict_birth_weight(model, scaler, encoder, input_data):
+    """Make prediction with proper error handling"""
     try:
-        data = data[column_order]  # Ensure correct column order
-        scaled_data = scaler.transform(data)
+        # Ensure correct feature order
+        input_data = input_data[model.feature_names_in_]
+        
+        # Scale and predict
+        scaled_data = scaler.transform(input_data)
         prediction = model.predict(scaled_data)[0]
-        decoded = label_encoder.inverse_transform([prediction])[0]
+        decoded = encoder.inverse_transform([prediction])[0]
         confidence = np.max(model.predict_proba(scaled_data)) * 100
         return decoded, confidence
-    except NotFittedError:
-        st.error("Model or scaler is not fitted.")
+        
+    except KeyError as e:
+        st.error(f"Missing required feature: {str(e)}")
     except Exception as e:
         st.error(f"Prediction error: {str(e)}")
-        return None, None
+    return None, None
 
-# === MAIN UI ===
-st.title("NexusFlow: Neonatal Risk & Birth Weight Predictor")
+# === MAIN APP ===
+st.title("👶 NexusFlow: Neonatal Risk Predictor")
 
-# Tabs for Prediction & Analytics
-tabs = st.tabs(["Prediction", "Analytics"])
+# Load models once
+model, scaler, encoder = load_model_assets()
 
-# === Prediction Tab ===
-with tabs[0]:
+# Tabs interface
+tab1, tab2 = st.tabs(["Prediction", "Analytics"])
+
+# === PREDICTION TAB ===
+with tab1:
     st.subheader("Enter Maternal Data")
 
     with st.form("prediction_form"):
         col1, col2 = st.columns(2)
+        
         with col1:
             age = st.slider("Mother's Age (years)", 15, 45, 25)
-            hemoglobin_level = st.number_input("Hemoglobin Level (g/dl)", 5.0, 18.0, 11.0, step=0.1)
-            gestational_age = st.slider("Gestational Age (weeks)", 20, 42, 38)
-            household_income = st.selectbox("Household Income Level", ["Low", "Medium", "High"])
-            iron_supp = st.radio("Iron Supplementation", ["Yes", "No"], horizontal=True)
+            systolic = st.number_input("Systolic BP (mmHg)", 80, 200, 110)
+            diastolic = st.number_input("Diastolic BP (mmHg)", 40, 120, 70)
+            hemoglobin = st.number_input("Hemoglobin (g/dL)", 5.0, 18.0, 11.0, step=0.1)
+            parity = st.selectbox("Previous Births", [0, 1, 2, 3, 4, "5+"])
+            
         with col2:
-            diabetes = st.radio("Has Diabetes", ["Yes", "No"], horizontal=True)
-            hypertension = st.radio("Has Hypertension", ["Yes", "No"], horizontal=True)
-            smoking_status = st.radio("Smoker", ["Yes", "No"], horizontal=True)
-            alcohol = st.radio("Alcohol Use", ["Yes", "No"], horizontal=True)
-            education_level = st.selectbox("Education Level", ["None", "Primary", "Secondary", "Tertiary"])
-
-        submit = st.form_submit_button("Predict Birth Weight Category")
+            anemia = st.radio("Anemia", ["No", "Yes"], horizontal=True)
+            preeclampsia = st.radio("Preeclampsia", ["No", "Yes"], horizontal=True)
+            diabetes = st.radio("Diabetes", ["No", "Yes"], horizontal=True)
+            hypertension = st.radio("Hypertension", ["No", "Yes"], horizontal=True)
+            smoking = st.radio("Smoking", ["No", "Yes"], horizontal=True)
+        
+        submit = st.form_submit_button("Predict Birth Weight")
 
     if submit:
-        model, scaler, label_encoder, column_order = load_model_assets()
-        with st.spinner("Analyzing data and making prediction..."):
+        with st.spinner("Analyzing data..."):
             try:
+                # Prepare input data (align with model's expected features)
                 input_df = pd.DataFrame({
                     'age': [age],
+                    'systolic_bp': [systolic],
+                    'diastolic_bp': [diastolic],
+                    'hemoglobin': [hemoglobin],
+                    'parity': [5 if parity == "5+" else int(parity)],
+                    'anemia': [1 if anemia == "Yes" else 0],
+                    'preeclampsia': [1 if preeclampsia == "Yes" else 0],
                     'has_diabetes': [1 if diabetes == "Yes" else 0],
                     'has_hypertension': [1 if hypertension == "Yes" else 0],
-                    'hemoglobin_level': [hemoglobin_level],
-                    'household_income': [ {"Low": 0, "Medium": 1, "High": 2}[household_income] ],
-                    'iron_supplementation': [1 if iron_supp == "Yes" else 0],
-                    'smoking_status': [1 if smoking_status == "Yes" else 0],
-                    'alcohol_consumption': [1 if alcohol == "Yes" else 0],
-                    'education_level': [ {"None": 0, "Primary": 1, "Secondary": 2, "Tertiary": 3}[education_level] ],
-                    'gestational_age_weeks': [gestational_age]
+                    'smoking_status': [1 if smoking == "Yes" else 0]
                 })
-
-                category, confidence = predict_birth_weight(model, scaler, label_encoder, input_df, column_order)
-
-                if category is not None:
+                
+                # Make prediction
+                category, confidence = predict_birth_weight(model, scaler, encoder, input_df)
+                
+                if category:
                     risk_class = "low-risk" if category == "Normal" else "medium-risk" if category == "Low" else "high-risk"
-
+                    
                     st.markdown(f"""
                     <div class="prediction-box {risk_class}">
                         <h3>Prediction Result</h3>
-                        <p>Predicted Birth Weight Category: <strong>{category}</strong></p>
-                        <p>Confidence Score: <strong>{confidence:.1f}%</strong></p>
+                        <p>Birth Weight: <strong>{category}</strong></p>
+                        <p>Confidence: <strong>{confidence:.1f}%</strong></p>
                     </div>
                     """, unsafe_allow_html=True)
-
-                    with st.expander("What does this prediction mean?"):
+                    
+                    with st.expander("Clinical Interpretation"):
                         if category == "Normal":
-                            st.success("Normal birth weight (2500-4000g). Likely healthy outcome.")
+                            st.success("Normal birth weight (2500-4000g)")
                         elif category == "Low":
-                            st.warning("Low birth weight (1500-2500g). May need special care.")
+                            st.warning("Low birth weight (1500-2500g)")
                         else:
-                            st.error("Very low birth weight (<1500g). High risk of complications.")
-                else:
-                    st.error("Prediction failed due to input mismatch or model error.")
-
+                            st.error("Very low birth weight (<1500g)")
+            
             except Exception as e:
-                st.error(f"An unexpected error occurred: {str(e)}")
+                st.error(f"Application error: {str(e)}")
 
-# === Analytics Tab ===
-with tabs[1]:
-    st.subheader("Data Insight Dashboard")
+# === ANALYTICS TAB ===
+with tab2:
+    st.subheader("Data Insights")
+    
     try:
-        df = pd.read_csv("analytics_sample.csv")
-        st.markdown("### Birth Weight Distribution")
-        fig = px.histogram(df, x="birth_weight_category", color="birth_weight_category", title="Weight Categories")
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.markdown("### Feature Correlation")
-        corr = df.drop(columns=['birth_weight_category']).corr()
-        fig_corr = px.imshow(corr, text_auto=True, title="Correlation Matrix")
-        st.plotly_chart(fig_corr, use_container_width=True)
-    except FileNotFoundError:
-        st.info("Analytics data not found. Upload `analytics_sample.csv` to see insights.")
+        if os.path.exists("analytics_sample.csv"):
+            df = pd.read_csv("analytics_sample.csv")
+            
+            st.markdown("### Birth Weight Distribution")
+            fig = px.histogram(df, x="birth_weight_category", 
+                              color="birth_weight_category",
+                              title="Weight Categories")
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("### Feature Correlations")
+            numeric_cols = df.select_dtypes(include=np.number).columns
+            fig = px.imshow(df[numeric_cols].corr(), 
+                           text_auto=True,
+                           title="Correlation Matrix")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Analytics data not available")
+            
     except Exception as e:
         st.error(f"Analytics error: {str(e)}")
 
-# === Footer ===
+# === FOOTER ===
 st.markdown(f"""
 ---
 <div style="text-align: center;">
-    <p>© 2025 NexusFlow · Built for SDG 3.1 · <a href="mailto:info@nexusflow.ai">Contact Us</a></p>
-    <p><small>Version {APP_VERSION} · Last updated: {pd.Timestamp.now().strftime("%Y-%m-%d")}</small></p>
+    <p>© {datetime.now().year} NexusFlow · Clinical Decision Support</p>
+    <p><small>Version {APP_VERSION}</small></p>
 </div>
 """, unsafe_allow_html=True)
