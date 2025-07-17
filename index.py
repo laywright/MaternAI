@@ -1,104 +1,124 @@
+# app.py (Simplified NexusFlow Neonatal Predictor)
+
 import streamlit as st
 import pandas as pd
-import joblib
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from streamlit_extras.switch_page_button import switch_page
-from streamlit_extras.metric_cards import style_metric_cards
-import stripe
+import joblib
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+import plotly.express as px
 
-# === CONFIGURATION ===
-st.set_page_config(page_title="NexusFlow | Birth Risk Predictor", page_icon="🧒", layout="wide")
+# === 🎨 UI CONFIG ===
+st.set_page_config(
+    page_title="NexusFlow | Neonatal Risk Predictor", 
+    layout="wide",
+    page_icon="👶"
+)
+
 st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-        html, body, [class*="css"]  {
-            font-family: 'Inter', sans-serif;
-        }
-        .main-header { font-size: 3rem; font-weight: bold; color: #004643; }
-        .subheader { font-size: 1.2rem; color: #555; }
-        .section { margin-top: 40px; }
-    </style>
+<style>
+    .main {background-color: #f7f9fc;}
+    h1 {color: #0072e5;}
+    .stButton>button {background-color: #0072e5; color: white; border-radius: 0.5em;}
+    .prediction-box {padding: 1.5em; border-radius: 0.5em; margin: 1em 0;}
+    .low-risk {background-color: #d4edda; color: #155724;}
+    .medium-risk {background-color: #fff3cd; color: #856404;}
+    .high-risk {background-color: #f8d7da; color: #721c24;}
+</style>
 """, unsafe_allow_html=True)
 
-# === Load Model and Transformers ===
-model = joblib.load("model.pkl")
-scaler = joblib.load("scaler.pkl")
-label_encoders = joblib.load("label_encoders.pkl")
+# === 📄 TITLE ===
+st.title("👶 NexusFlow: Neonatal Risk & Birth Weight Predictor")
 
-# === PAGE HEADER ===
-st.markdown("<div class='main-header'>NexusFlow: Predict Neonatal Risk with AI</div>", unsafe_allow_html=True)
-st.markdown("<div class='subheader'>An ML-powered tool for early prediction of maternal and neonatal complications.</div>", unsafe_allow_html=True)
+# === 📥 INPUT SECTION ===
+st.subheader("📋 Enter Maternal Data")
 
-# === SIDEBAR ===
-st.sidebar.image("https://i.imgur.com/CJwZ5Kf.png", width=150)
-st.sidebar.markdown("## Pricing")
-st.sidebar.info("Free: 5 predictions/week\n\nPremium: $5/mo for unlimited use")
+with st.form("prediction_form"):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        age = st.slider("Mother's Age (years)", 15, 45, 25, help="Age range 15-45 years")
+        systolic = st.number_input("Systolic BP (mmHg)", 80, 200, 110, 
+                                 help="Normal range: 90-120 mmHg")
+        diastolic = st.number_input("Diastolic BP (mmHg)", 40, 120, 70,
+                                  help="Normal range: 60-80 mmHg")
+        
+    with col2:
+        hemoglobin = st.number_input("Hemoglobin Level (g/dl)", 5.0, 18.0, 11.0, step=0.1,
+                                    help="Normal range: 12-16 g/dl")
+        parity = st.selectbox("Number of Previous Births", [0, 1, 2, 3, 4, "5+"],
+                            help="Including stillbirths and miscarriages")
+        anemia = st.radio("Anemia Present", ["Yes", "No"], horizontal=True)
+        preeclampsia = st.radio("History of Preeclampsia", ["Yes", "No"], horizontal=True)
+    
+    submit = st.form_submit_button("Predict Birth Weight Category")
 
-# === INPUTS ===
-st.markdown("### 🎓 Enter Maternal & Birth Data")
-col1, col2, col3 = st.columns(3)
+# === 🧠 MODEL & PREDICTION ===
+def load_model_assets():
+    """Load ML model and preprocessing assets"""
+    try:
+        model = joblib.load("model_rf.pkl")
+        scaler = joblib.load("scaler.pkl")
+        le = joblib.load("label_encoder.pkl")
+        return model, scaler, le
+    except FileNotFoundError as e:
+        st.error(f"Model file not found: {str(e)}")
+        st.stop()
+    except Exception as e:
+        st.error(f"Error loading model: {str(e)}")
+        st.stop()
 
-with col1:
-    age = st.number_input("Mother's Age", min_value=10, max_value=60, value=25)
-    anemia = st.selectbox("Anemia", ['Yes', 'No'])
+if submit:
+    with st.spinner("Analyzing data and making prediction..."):
+        try:
+            # Load model
+            model, scaler, le = load_model_assets()
+            
+            # Process parity input
+            parity_val = 5 if parity == "5+" else int(parity)
+            
+            # Prepare input data
+            input_data = pd.DataFrame({
+                'age': [age],
+                'systolic_bp': [systolic],
+                'diastolic_bp': [diastolic],
+                'hemoglobin': [hemoglobin],
+                'parity': [parity_val],
+                'anemia': [1 if anemia == "Yes" else 0],
+                'preeclampsia': [1 if preeclampsia == "Yes" else 0]
+            })
 
-with col2:
-    bp = st.number_input("Blood Pressure (mmHg)", value=80)
-    prev_births = st.number_input("Previous Births", 0, 10)
+            # Scale and predict
+            input_scaled = scaler.transform(input_data)
+            prediction = model.predict(input_scaled)[0]
+            decoded = le.inverse_transform([prediction])[0]
+            
+            # Display results with appropriate styling
+            risk_level = "low-risk" if decoded == "Normal" else "medium-risk" if decoded == "Low" else "high-risk"
+            st.markdown(f"""
+            <div class="prediction-box {risk_level}">
+                <h3>Prediction Result</h3>
+                <p>Predicted Birth Weight Category: <strong>{decoded}</strong></p>
+                <p>Confidence: <strong>{np.max(model.predict_proba(input_scaled))*100:.1f}%</strong></p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Explanation
+            with st.expander("What does this prediction mean?"):
+                if decoded == "Normal":
+                    st.info("Normal birth weight (2500-4000g). The baby is likely to be born with healthy weight.")
+                elif decoded == "Low":
+                    st.warning("Low birth weight (1500-2500g). The baby may need special care after birth.")
+                else:
+                    st.error("Very low birth weight (<1500g). High risk of complications requiring NICU care.")
 
-with col3:
-    gest_weeks = st.number_input("Gestational Weeks", min_value=24, max_value=42, value=38)
-    protein_urine = st.selectbox("Protein in Urine", ['Positive', 'Negative'])
+        except Exception as e:
+            st.error(f"An error occurred during prediction: {str(e)}")
 
-# === FORMATTING ===
-data = pd.DataFrame({
-    'age': [age],
-    'anemia': [anemia],
-    'blood_pressure': [bp],
-    'previous_births': [prev_births],
-    'gestational_weeks': [gest_weeks],
-    'protein_urine': [protein_urine]
-})
-
-# Encode categorical columns
-for col in data.select_dtypes(include='object').columns:
-    le = label_encoders[col]
-    data[col] = le.transform(data[col])
-
-# === SCALE & PREDICT ===
-if st.button("🤝 Predict Risk"):
-    data_scaled = scaler.transform(data)
-    pred = model.predict(data_scaled)[0]
-    pred_class = label_encoders['birth_weight_category'].inverse_transform([pred])[0]
-
-    st.success(f"Prediction: {pred_class}")
-    st.info("Recommendation: Refer for enhanced monitoring.")
-
-    st.markdown("---")
-    st.markdown("### 🌈 Prediction Details")
-    st.json({
-        "Prediction": str(pred_class),
-        "Input": data.to_dict(orient='records')[0]
-    })
-
-# === SUBSCRIPTION SYSTEM ===
-st.markdown("### 💳 Upgrade to Premium")
-st.markdown("NexusFlow is free for up to 5 predictions/week. Upgrade for unlimited access!")
-st.link_button("Upgrade via Stripe", "https://buy.stripe.com/test_upgrade_page")
-
-# === LIVE METRICS ===
-st.markdown("### 📊 Real-Time Platform Metrics")
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Total Users", "1,254")
-with col2:
-    st.metric("Predictions Today", "128")
-with col3:
-    st.metric("Accuracy", "92.6%")
-
-style_metric_cards(border_left_color="#17A589")
-
-# === FOOTER ===
-st.markdown("---")
-st.markdown("Made with ❤️ by NexusFlow Team | [Privacy Policy](#) | [Support](#)")
+# === 📌 FOOTER ===
+st.markdown("""
+---
+<div style="text-align: center;">
+    <p>© 2025 NexusFlow · Built for SDG 3.1 · <a href="mailto:info@nexusflow.ai">Contact Us</a></p>
+    <p><small>Version 2.1 · Last updated: {}</small></p>
+</div>
+""".format(pd.Timestamp.now().strftime("%Y-%m-%d")), unsafe_allow_html=True)
