@@ -1,19 +1,12 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import plotly.express as px
 from sklearn.exceptions import NotFittedError
 
 # === CONFIG ===
-APP_TITLE = "NexusFlow | Neonatal Risk Predictor"
-APP_VERSION = "2.3"
+st.set_page_config(page_title="NexusFlow | Neonatal Risk Predictor", layout="wide", page_icon="👶")
 
-st.set_page_config(page_title=APP_TITLE, layout="wide", page_icon="👶")
-
-# === STYLES ===
 st.markdown("""
 <style>
     .main {background-color: #f7f9fc;}
@@ -26,136 +19,99 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# === Load Model Assets ===
+# === Load Assets ===
 @st.cache_resource
 def load_model_assets():
     try:
         model = joblib.load("model_rf.pkl")
         scaler = joblib.load("scaler.pkl")
         label_encoder = joblib.load("label_encoder.pkl")
-        column_order = [
-            'age',
-            'has_diabetes',
-            'has_hypertension',
-            'hemoglobin_level',
-            'household_income',
-            'iron_supplementation',
-            'smoking_status',
-            'alcohol_consumption',
-            'education_level',
-            'gestational_age_weeks'
-        ]
-        return model, scaler, label_encoder, column_order
+        return model, scaler, label_encoder
     except FileNotFoundError as e:
         st.error(f"Required model asset not found: {str(e)}")
         st.stop()
-    except Exception as e:
-        st.error(f"Unexpected error loading model assets: {str(e)}")
-        st.stop()
 
 # === Predict Function ===
-def predict_birth_weight(model, scaler, label_encoder, data, column_order):
+def predict(model, scaler, label_encoder, data):
     try:
-        data = data[column_order]  # Ensure correct feature order
         scaled = scaler.transform(data)
-        prediction = model.predict(scaled)[0]
-        decoded = label_encoder.inverse_transform([prediction])[0]
+        pred = model.predict(scaled)[0]
+        decoded = label_encoder.inverse_transform([pred])[0]
         confidence = np.max(model.predict_proba(scaled)) * 100
         return decoded, confidence
-    except NotFittedError:
-        st.error("Model or scaler not fitted.")
     except Exception as e:
         st.error(f"Prediction error: {str(e)}")
         return None, None
 
-# === UI ===
-st.title("NexusFlow: Neonatal Risk & Birth Weight Predictor")
-tabs = st.tabs(["Prediction", "Analytics"])
+# === MAIN UI ===
+st.title("👶 NexusFlow: Neonatal Risk & Birth Weight Predictor")
 
-# === Prediction Tab ===
-with tabs[0]:
+with st.form("prediction_form"):
     st.subheader("Enter Maternal Data")
 
-    with st.form("prediction_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            age = st.slider("Mother's Age (years)", 15, 45, 25)
-            hemoglobin_level = st.number_input("Hemoglobin Level (g/dl)", 5.0, 18.0, 11.0, step=0.1)
-            gestational_age = st.slider("Gestational Age (weeks)", 20, 42, 38)
-            household_income = st.selectbox("Household Income Level", ["Low", "Medium", "High"])
-            iron_supp = st.radio("Iron Supplementation", ["Yes", "No"], horizontal=True)
-        with col2:
-            diabetes = st.radio("Has Diabetes", ["Yes", "No"], horizontal=True)
-            hypertension = st.radio("Has Hypertension", ["Yes", "No"], horizontal=True)
-            smoking_status = st.radio("Smoker", ["Yes", "No"], horizontal=True)
-            alcohol = st.radio("Alcohol Use", ["Yes", "No"], horizontal=True)
-            education_level = st.selectbox("Education Level", ["None", "Primary", "Secondary", "Tertiary"])
+    col1, col2 = st.columns(2)
 
-        submit = st.form_submit_button("Predict Birth Weight Category")
+    with col1:
+        age = st.slider("Mother's Age (years)", 15, 45, 25)
+        pre_preg_bmi = st.number_input("Pre-pregnancy BMI", 10.0, 50.0, 22.0)
+        gest_weeks = st.slider("Gestational Age (weeks)", 20, 42, 38)
+        systolic = st.number_input("Systolic Blood Pressure (mmHg)", 90, 200, 110)
+        diastolic = st.number_input("Diastolic Blood Pressure (mmHg)", 50, 140, 70)
+        hemoglobin = st.number_input("Hemoglobin Level (g/dl)", 5.0, 18.0, 11.0)
 
-    if submit:
-        model, scaler, label_encoder, column_order = load_model_assets()
+    with col2:
+        prenatal_visits = st.slider("Number of Prenatal Visits", 0, 20, 5)
+        diabetes = st.radio("Has Diabetes", ["Yes", "No"], horizontal=True)
+        hypertension = st.radio("Has Hypertension", ["Yes", "No"], horizontal=True)
+        smoking = st.radio("Smoker", ["Yes", "No"], horizontal=True)
+        alcohol = st.radio("Alcohol Use", ["Yes", "No"], horizontal=True)
+        education = st.selectbox("Education Level", ["None", "Primary", "Secondary", "Tertiary"])
+        income = st.selectbox("Household Income Level", ["Low", "Medium", "High"])
+        iron = st.radio("Iron Supplementation", ["Yes", "No"], horizontal=True)
 
-        input_df = pd.DataFrame({
-            'age': [age],
-            'has_diabetes': [1 if diabetes == "Yes" else 0],
-            'has_hypertension': [1 if hypertension == "Yes" else 0],
-            'hemoglobin_level': [hemoglobin_level],
-            'household_income': [{"Low": 0, "Medium": 1, "High": 2}[household_income]],
-            'iron_supplementation': [1 if iron_supp == "Yes" else 0],
-            'smoking_status': [1 if smoking_status == "Yes" else 0],
-            'alcohol_consumption': [1 if alcohol == "Yes" else 0],
-            'education_level': [{"None": 0, "Primary": 1, "Secondary": 2, "Tertiary": 3}[education_level]],
-            'gestational_age_weeks': [gestational_age]
-        })
+    submitted = st.form_submit_button("🔍 Predict Birth Weight")
 
-        with st.spinner("Analyzing data..."):
-            category, confidence = predict_birth_weight(model, scaler, label_encoder, input_df, column_order)
+if submitted:
+    model, scaler, label_encoder = load_model_assets()
 
-            if category:
-                risk_class = "low-risk" if category == "Normal" else "medium-risk" if category == "Low" else "high-risk"
+    input_data = pd.DataFrame([[
+        age,
+        pre_preg_bmi,
+        gest_weeks,
+        systolic,
+        diastolic,
+        hemoglobin,
+        prenatal_visits,
+        1 if diabetes == "Yes" else 0,
+        1 if hypertension == "Yes" else 0,
+        1 if smoking == "Yes" else 0,
+        1 if alcohol == "Yes" else 0,
+        {"None": 0, "Primary": 1, "Secondary": 2, "Tertiary": 3}[education],
+        {"Low": 0, "Medium": 1, "High": 2}[income],
+        1 if iron == "Yes" else 0
+    ]], columns=[
+        'age', 'pre_pregnancy_bmi', 'gestational_age_weeks',
+        'blood_pressure_systolic', 'blood_pressure_diastolic',
+        'hemoglobin_level', 'number_of_prenatal_visits',
+        'has_diabetes', 'has_hypertension', 'smoking_status',
+        'alcohol_consumption', 'education_level', 'household_income',
+        'iron_supplementation'
+    ])
 
-                st.markdown(f"""
-                <div class="prediction-box {risk_class}">
-                    <h3>Prediction Result</h3>
-                    <p>Predicted Birth Weight Category: <strong>{category}</strong></p>
-                    <p>Confidence Score: <strong>{confidence:.1f}%</strong></p>
-                </div>
-                """, unsafe_allow_html=True)
+    category, confidence = predict(model, scaler, label_encoder, input_data)
 
-                with st.expander("What does this prediction mean?"):
-                    if category == "Normal":
-                        st.success("Birth weight is within normal range (2500g - 4000g).")
-                    elif category == "Low":
-                        st.warning("Low birth weight (1500g - 2500g). May require special attention.")
-                    else:
-                        st.error("Very low birth weight (<1500g). High-risk newborn.")
-
-# === Analytics Tab ===
-with tabs[1]:
-    st.subheader("Data Insight Dashboard")
-    try:
-        df = pd.read_csv("analytics_sample.csv")
-
-        st.markdown("### Birth Weight Category Distribution")
-        fig1 = px.histogram(df, x="birth_weight_category", color="birth_weight_category", title="Birth Weight Distribution")
-        st.plotly_chart(fig1, use_container_width=True)
-
-        st.markdown("### Feature Correlation Matrix")
-        corr = df.drop(columns=['birth_weight_category']).corr()
-        fig2 = px.imshow(corr, text_auto=True, title="Correlation Matrix")
-        st.plotly_chart(fig2, use_container_width=True)
-
-    except FileNotFoundError:
-        st.info("No analytics data found. Upload `analytics_sample.csv` to view insights.")
-    except Exception as e:
-        st.error(f"Analytics error: {str(e)}")
-
-# === Footer ===
-st.markdown(f"""
----
-<div style="text-align: center;">
-    <p>© 2025 NexusFlow · SDG 3.1 Aligned · <a href="mailto:info@nexusflow.ai">Contact Us</a></p>
-    <p><small>Version {APP_VERSION} · Last updated: {pd.Timestamp.now().strftime('%Y-%m-%d')}</small></p>
-</div>
-""", unsafe_allow_html=True)
+    if category:
+        color_class = (
+            "low-risk" if category == "Normal" else
+            "medium-risk" if category == "Low" else
+            "high-risk"
+        )
+        st.markdown(f"""
+        <div class="prediction-box {color_class}">
+            <h3>Prediction Result</h3>
+            <p>Predicted Birth Weight Category: <strong>{category}</strong></p>
+            <p>Confidence Score: <strong>{confidence:.2f}%</strong></p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.error("Prediction failed.")
