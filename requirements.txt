@@ -1,0 +1,18 @@
+# Core dependencies
+streamlit==1.35.0
+pandas==2.2.1
+numpy==1.26.4
+scikit-learn==1.5.0
+matplotlib==3.8.4
+seaborn==0.13.2
+
+# Payment integration (if using Stripe or PayPal)
+stripe==9.7.0   # Only if you integrate Stripe
+requests==2.32.3
+
+# Deployment support
+python-dotenv==1.0.1  # For handling API keys securely
+
+# Optional UI improvements
+streamlit-option-menu==0.3.11
+Pillow==10.3.0  # For logo/image handling
