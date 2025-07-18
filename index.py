@@ -2,9 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import requests
+from PIL import Image
 from sklearn.exceptions import NotFittedError
-from streamlit_lottie import st_lottie
 
 # Page config
 st.set_page_config(page_title="MaternAI - Neonatal Risk Predictor", layout="wide", page_icon="👶")
@@ -46,16 +45,7 @@ st.markdown("""
 
 st.title("🤱 MaternAI: Neonatal Birth Weight Predictor")
 st.markdown("Empowering maternal wellness through data-driven prediction.")
-
-# === Load Lottie Animation ===
-def load_lottieurl(url):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
-
-lottie_animation = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_cgqfuzsr.json")
-st_lottie(lottie_animation, height=200)
+st.image("https://images.unsplash.com/photo-1587049352844-4a9a57bced3f", caption="Maternal Health", use_column_width=True)
 
 # === Load Model Assets ===
 @st.cache_resource
@@ -101,8 +91,8 @@ tooltips = {
 with st.sidebar:
     st.header("📋 Navigation")
     st.markdown("""
-        - 📅 Fill maternal data
-        - 🔍 Predict outcomes
+        - 📝 Fill maternal data
+        - 🔎 Predict outcomes
         - 📊 View insights
     """)
     st.markdown("Made with ❤️ for maternal health.")
@@ -175,10 +165,10 @@ st.markdown("---")
 st.subheader("📌 Next Steps")
 colA, colB, colC = st.columns(3)
 with colA:
-    st.button("📀 Save Result")
+    st.button("💾 Save Result")
 with colB:
     st.button("📤 Share with Doctor")
 with colC:
     st.button("📞 Seek Guidance")
 
-st.caption("Made with 🧬 and ❤️ | © 2025 MaternAI")
+st.caption("Made with 🧠 and ❤️ | © 2025 MaternAI")
