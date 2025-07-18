@@ -4,10 +4,28 @@ import numpy as np
 import joblib
 from sklearn.exceptions import NotFittedError
 
-# App config
-st.set_page_config(page_title="Neonatal Risk Predictor", layout="centered")
+# Page setup
+st.set_page_config(page_title="MaternAI - Neonatal Risk Predictor", layout="centered", page_icon="👶")
 
-st.title("👶 Neonatal Risk & Birth Weight Predictor")
+st.markdown("""
+    <style>
+    body {
+        background-color: #f7f3f0;
+    }
+    .main {
+        font-family: 'Segoe UI', sans-serif;
+    }
+    .stButton>button {
+        border-radius: 12px;
+        background-color: #f6b8b8;
+        color: white;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🤱 MaternAI: Neonatal Birth Weight Predictor")
+st.markdown("A maternal health tool to assess the predicted birth weight category of a newborn using medically relevant indicators.")
 
 # Load model assets
 @st.cache_resource
@@ -15,7 +33,6 @@ def load_assets():
     model = joblib.load("model_rf.pkl")
     scaler = joblib.load("scaler.pkl")
     label_encoder = joblib.load("label_encoder.pkl")
-
     feature_order = [
         'age',
         'pre_pregnancy_bmi',
@@ -34,10 +51,10 @@ def load_assets():
     ]
     return model, scaler, label_encoder, feature_order
 
-# Prediction function
+# Predict
 def predict(model, scaler, label_encoder, input_df, feature_order):
     try:
-        input_df = input_df[feature_order]  # Ensure column order
+        input_df = input_df[feature_order]
         scaled = scaler.transform(input_df)
         pred = model.predict(scaled)[0]
         prob = np.max(model.predict_proba(scaled)) * 100
@@ -50,19 +67,40 @@ def predict(model, scaler, label_encoder, input_df, feature_order):
         st.error(f"Prediction error: {e}")
         return None, None
 
-# === User Input Form ===
-st.subheader("Enter Maternal Information")
+# Educational tooltips
+tooltips = {
+    "bmi": "Body Mass Index (BMI) before pregnancy.",
+    "gestation": "Gestational age in weeks (typically 37–42 weeks).",
+    "bp_sys": "Systolic pressure (top number). Normal range: 90–120 mmHg.",
+    "bp_dia": "Diastolic pressure (bottom number). Normal: 60–80 mmHg.",
+    "hb": "Hemoglobin level. Normal: 11–16 g/dl during pregnancy.",
+    "visits": "Recommended 8+ visits during pregnancy.",
+}
+
+# Sidebar Navigation
+with st.sidebar:
+    st.header("📋 Navigation")
+    st.markdown("""
+        - 📝 Fill maternal info
+        - 🔎 Click 'Predict'
+        - 📊 View result
+    """)
+    st.markdown("Designed with ❤️ for maternal wellness.")
+    st.markdown("🔗 [Learn more](https://www.who.int/health-topics/maternal-health)")
+
+# Input Section
+st.subheader("📥 Enter Maternal Health Information")
 with st.form("input_form"):
     col1, col2 = st.columns(2)
 
     with col1:
         age = st.slider("Mother's Age (years)", 15, 45, 25)
-        pre_pregnancy_bmi = st.number_input("Pre-pregnancy BMI", 10.0, 50.0, 22.0)
-        gestational_age = st.slider("Gestational Age (weeks)", 20, 42, 38)
-        systolic = st.number_input("Systolic Blood Pressure (mmHg)", 80, 200, 110)
-        diastolic = st.number_input("Diastolic Blood Pressure (mmHg)", 50, 130, 70)
-        hemoglobin = st.number_input("Hemoglobin Level (g/dl)", 5.0, 18.0, 11.0)
-        prenatal_visits = st.slider("Number of Prenatal Visits", 0, 20, 5)
+        pre_pregnancy_bmi = st.number_input("Pre-pregnancy BMI", 10.0, 50.0, 22.0, help=tooltips["bmi"])
+        gestational_age = st.slider("Gestational Age (weeks)", 20, 42, 38, help=tooltips["gestation"])
+        systolic = st.number_input("Systolic BP (mmHg)", 80, 200, 110, help=tooltips["bp_sys"])
+        diastolic = st.number_input("Diastolic BP (mmHg)", 50, 130, 70, help=tooltips["bp_dia"])
+        hemoglobin = st.number_input("Hemoglobin Level (g/dl)", 5.0, 18.0, 11.0, help=tooltips["hb"])
+        prenatal_visits = st.slider("Number of Prenatal Visits", 0, 20, 5, help=tooltips["visits"])
 
     with col2:
         diabetes = st.radio("Has Diabetes?", ["Yes", "No"], horizontal=True)
@@ -73,34 +111,53 @@ with st.form("input_form"):
         income = st.selectbox("Household Income", ["Low", "Medium", "High"])
         iron = st.radio("Iron Supplementation?", ["Yes", "No"], horizontal=True)
 
-    submitted = st.form_submit_button("Predict Birth Weight Category")
+    submitted = st.form_submit_button("🚀 Predict Birth Weight Category")
 
-# === Handle Submission ===
+# Submission Logic
 if submitted:
-    model, scaler, label_encoder, feature_order = load_assets()
+    with st.spinner("Analyzing maternal health data..."):
+        model, scaler, label_encoder, feature_order = load_assets()
 
-    input_data = pd.DataFrame([{
-        'age': age,
-        'pre_pregnancy_bmi': pre_pregnancy_bmi,
-        'gestational_age_weeks': gestational_age,
-        'blood_pressure_systolic': systolic,
-        'blood_pressure_diastolic': diastolic,
-        'hemoglobin_level': hemoglobin,
-        'number_of_prenatal_visits': prenatal_visits,
-        'has_diabetes': 1 if diabetes == "Yes" else 0,
-        'has_hypertension': 1 if hypertension == "Yes" else 0,
-        'smoking_status': 1 if smoking == "Yes" else 0,
-        'alcohol_consumption': 1 if alcohol == "Yes" else 0,
-        'education_level': {"None": 0, "Primary": 1, "Secondary": 2, "Tertiary": 3}[education],
-        'household_income': {"Low": 0, "Medium": 1, "High": 2}[income],
-        'iron_supplementation': 1 if iron == "Yes" else 0
-    }])
+        input_data = pd.DataFrame([{
+            'age': age,
+            'pre_pregnancy_bmi': pre_pregnancy_bmi,
+            'gestational_age_weeks': gestational_age,
+            'blood_pressure_systolic': systolic,
+            'blood_pressure_diastolic': diastolic,
+            'hemoglobin_level': hemoglobin,
+            'number_of_prenatal_visits': prenatal_visits,
+            'has_diabetes': 1 if diabetes == "Yes" else 0,
+            'has_hypertension': 1 if hypertension == "Yes" else 0,
+            'smoking_status': 1 if smoking == "Yes" else 0,
+            'alcohol_consumption': 1 if alcohol == "Yes" else 0,
+            'education_level': {"None": 0, "Primary": 1, "Secondary": 2, "Tertiary": 3}[education],
+            'household_income': {"Low": 0, "Medium": 1, "High": 2}[income],
+            'iron_supplementation': 1 if iron == "Yes" else 0
+        }])
 
-    with st.spinner("Analyzing..."):
         category, confidence = predict(model, scaler, label_encoder, input_data, feature_order)
 
-        if category:
-            st.success(f"Prediction: **{category}**")
-            st.info(f"Confidence: {confidence:.2f}%")
-        else:
-            st.error("Prediction failed.")
+    if category:
+        st.success(f"🎯 Predicted Birth Weight Category: **{category}**")
+        st.metric("Confidence Level", f"{confidence:.2f}%")
+        st.progress(int(confidence))
+        st.markdown(f"""
+        <div style='background-color: #fff7f3; padding: 1em; border-radius: 10px;'>
+            <b>Note:</b> This prediction is a screening tool. For a comprehensive assessment, please consult a qualified medical professional.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.error("⚠️ Prediction failed. Please review the input data.")
+
+# Call to Action
+st.markdown("---")
+st.subheader("📌 Next Steps")
+colA, colB, colC = st.columns(3)
+with colA:
+    st.button("💾 Save Result")
+with colB:
+    st.button("📤 Share with Doctor")
+with colC:
+    st.button("📞 Seek Guidance")
+
+st.caption("Made with 🧠 and 💕 | © 2025 MaternAI")
