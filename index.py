@@ -4,7 +4,6 @@ import numpy as np
 import joblib
 import plotly.express as px
 from sklearn.exceptions import NotFittedError
-from streamlit_extras.metric_cards import style_metric_cards
 
 # App config with custom theme and better layout
 st.set_page_config(
@@ -232,7 +231,7 @@ with st.expander("📋 Maternal Health Information", expanded=True):
         form_elements = [age, pre_pregnancy_bmi, gestational_age, systolic, diastolic, 
                         hemoglobin, prenatal_visits, diabetes, hypertension, smoking, 
                         alcohol, education, income, iron]
-        completion = min(100, int(sum(1 for elem in form_elements if (isinstance(elem, (int, float)) and elem != 0) or 
+        completion = min(100, int(sum(1 for elem in form_elements if ((isinstance(elem, (int, float)) and elem != 0) or 
                                   (isinstance(elem, str) and elem in ["Yes", "No", "Primary", "Medium"])) * 7)
         progress_bar.progress(completion, text=f"Form Completion: {completion}%")
 
