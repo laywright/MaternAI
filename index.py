@@ -5,170 +5,148 @@ import joblib
 from PIL import Image
 from sklearn.exceptions import NotFittedError
 
-# Page config
-st.set_page_config(page_title="MaternAI - Neonatal Risk Predictor", layout="wide", page_icon="👶")
+st.set_page_config(page_title="MaternAI 🧠", layout="wide", page_icon="🤱")
 
-# === Custom Styling ===
+# ✨ CSS for gradients, cards, animations
 st.markdown("""
-    <style>
-    body {
-        background: linear-gradient(to bottom right, #fff0f5, #ffe4e1);
-        font-family: 'Segoe UI', sans-serif;
-    }
-    .stApp {
-        background-color: rgba(255, 255, 255, 0.95);
-        border-radius: 15px;
-        padding: 2em;
-    }
-    .stButton > button {
-        background-color: #f6b8b8;
-        color: white;
-        font-weight: bold;
-        border-radius: 10px;
-        padding: 0.5em 1.2em;
-    }
-    .stProgress > div > div {
-        background-color: #8ab6d6;
-    }
-    .card {
-        background-color: white;
-        padding: 1.5em;
-        margin-bottom: 1.2em;
-        border-radius: 15px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-    }
-    html, body, [class*="css"] {
-        font-family: 'Segoe UI', sans-serif;
-    }
-    </style>
+<style>
+  body {
+    background: linear-gradient(135deg, #fff0f5, #ffe4e1);
+    font-family: 'Poppins', sans-serif;
+  }
+  .card {
+    background: white;
+    padding: 1.5em;
+    margin: 1em auto;
+    border-radius: 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    max-width: 800px;
+    animation: fadeIn 1s ease-in-out;
+  }
+  .stButton>button {
+    background-color: #8ab6d6;
+    color: white;
+    font-weight: bold;
+    border-radius: 12px;
+    transition: transform 0.2s, background-color 0.3s;
+  }
+  .stButton>button:hover {
+    background-color: #7aa5c6;
+    transform: translateY(-2px);
+  }
+  .progress-bar > div > div {
+    background-color: #b2d6c6 !important;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
 """, unsafe_allow_html=True)
 
-st.title("🤱 MaternAI: Neonatal Birth Weight Predictor")
-st.markdown("Empowering maternal wellness through data-driven prediction.")
-st.image("https://images.unsplash.com/photo-1587049352844-4a9a57bced3f", caption="Maternal Health", use_column_width=True)
+# Header + Banner
+col1, col2 = st.columns([3,1])
+with col1:
+    st.title("🤱 MaternAI")
+    st.markdown("Predictive neonatal birth weight insights for expectant mothers.")
+with col2:
+    banner = Image.open("maternal_banner.jpg")  # or use URL
+    st.image(banner, width=150)
 
-# === Load Model Assets ===
+# Sidebar
+with st.sidebar:
+    st.header("📋 Steps")
+    st.write("1. Fill in details\n2. Click Predict\n3. See results & next steps")
+    st.info("All data is private & secure.")
+
+# 🔄 Load needed assets
 @st.cache_resource
 def load_assets():
     model = joblib.load("model_rf.pkl")
     scaler = joblib.load("scaler.pkl")
-    label_encoder = joblib.load("label_encoder.pkl")
-    feature_order = [
-        'age', 'pre_pregnancy_bmi', 'gestational_age_weeks', 'blood_pressure_systolic',
-        'blood_pressure_diastolic', 'hemoglobin_level', 'number_of_prenatal_visits',
-        'has_diabetes', 'has_hypertension', 'smoking_status', 'alcohol_consumption',
-        'education_level', 'household_income', 'iron_supplementation'
+    encoder = joblib.load("label_encoder.pkl")
+    features = [
+        'age','pre_pregnancy_bmi','gestational_age_weeks',
+        'blood_pressure_systolic','blood_pressure_diastolic',
+        'hemoglobin_level','number_of_prenatal_visits',
+        'has_diabetes','has_hypertension',
+        'smoking_status','alcohol_consumption',
+        'education_level','household_income','iron_supplementation'
     ]
-    return model, scaler, label_encoder, feature_order
+    return model, scaler, encoder, features
 
-# === Prediction Function ===
-def predict(model, scaler, label_encoder, input_df, feature_order):
+def predict(model, scaler, encoder, df, features):
     try:
-        input_df = input_df[feature_order]
-        scaled = scaler.transform(input_df)
-        pred = model.predict(scaled)[0]
-        prob = np.max(model.predict_proba(scaled)) * 100
-        decoded = label_encoder.inverse_transform([pred])[0]
-        return decoded, prob
-    except NotFittedError:
-        st.error("Model not fitted.")
-        return None, None
+        df = df[features]
+        X = scaler.transform(df)
+        pred = model.predict(X)[0]
+        prob = np.max(model.predict_proba(X)) * 100
+        return encoder.inverse_transform([pred])[0], prob
     except Exception as e:
         st.error(f"Prediction error: {e}")
         return None, None
 
-# === Educational Tooltips ===
-tooltips = {
-    "bmi": "Body Mass Index (BMI) before pregnancy.",
-    "gestation": "Gestational age in weeks (typically 37–42 weeks).",
-    "bp_sys": "Systolic pressure (top number). Normal: 90–120 mmHg.",
-    "bp_dia": "Diastolic pressure (bottom number). Normal: 60–80 mmHg.",
-    "hb": "Hemoglobin level. Normal: 11–16 g/dl during pregnancy.",
-    "visits": "Recommended 8+ visits during pregnancy."
-}
-
-# === Sidebar Navigation ===
-with st.sidebar:
-    st.header("📋 Navigation")
-    st.markdown("""
-        - 📝 Fill maternal data
-        - 🔎 Predict outcomes
-        - 📊 View insights
-    """)
-    st.markdown("Made with ❤️ for maternal health.")
-    st.markdown("[WHO Maternal Health Info](https://www.who.int/health-topics/maternal-health)")
-
-# === Input Form ===
+# Input Form Card
 st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.subheader("📥 Enter Maternal Health Information")
-with st.form("input_form"):
-    col1, col2 = st.columns(2)
+st.subheader("Enter Maternal Health Data")
 
-    with col1:
-        age = st.slider("Mother's Age (years)", 15, 45, 25)
-        pre_pregnancy_bmi = st.number_input("Pre-pregnancy BMI", 10.0, 50.0, 22.0, help=tooltips["bmi"])
-        gestational_age = st.slider("Gestational Age (weeks)", 20, 42, 38, help=tooltips["gestation"])
-        systolic = st.number_input("Systolic BP (mmHg)", 80, 200, 110, help=tooltips["bp_sys"])
-        diastolic = st.number_input("Diastolic BP (mmHg)", 50, 130, 70, help=tooltips["bp_dia"])
-        hemoglobin = st.number_input("Hemoglobin Level (g/dl)", 5.0, 18.0, 11.0, help=tooltips["hb"])
-        prenatal_visits = st.slider("Number of Prenatal Visits", 0, 20, 5, help=tooltips["visits"])
+with st.form("form"):
+    c1, c2 = st.columns(2)
+    # Left
+    with c1:
+        age = st.slider("Age (years)", 15, 45, 28)
+        bmi = st.number_input("Pre-pregnancy BMI", 10.0, 50.0, 23.5)
+        ga = st.slider("Gestational age (weeks)", 20, 42, 38)
+        sys = st.number_input("Systolic BP", 80, 200, 115)
+        dia = st.number_input("Diastolic BP", 50, 130, 70)
+    # Right
+    with c2:
+        hb = st.number_input("Hemoglobin level (g/dl)", 5.0, 18.0, 11.5)
+        visits = st.slider("Prenatal visits", 0, 20, 6)
+        diabetes = st.radio("Diabetes?", ("Yes", "No"), horizontal=True)
+        hypertension = st.radio("Hypertension?", ("Yes", "No"), horizontal=True)
+        smoke = st.radio("Smoking?", ("Yes", "No"), horizontal=True)
+        alcohol = st.radio("Alcohol?", ("Yes", "No"), horizontal=True)
+        education = st.selectbox("Education", ["None", "Primary", "Secondary", "Tertiary"])
+        income = st.selectbox("Income", ["Low", "Medium", "High"])
+        iron = st.radio("Iron supplements?", ("Yes", "No"), horizontal=True)
 
-    with col2:
-        diabetes = st.radio("Has Diabetes?", ["Yes", "No"], horizontal=True)
-        hypertension = st.radio("Has Hypertension?", ["Yes", "No"], horizontal=True)
-        smoking = st.radio("Smoker?", ["Yes", "No"], horizontal=True)
-        alcohol = st.radio("Alcohol Consumption?", ["Yes", "No"], horizontal=True)
-        education = st.selectbox("Education Level", ["None", "Primary", "Secondary", "Tertiary"])
-        income = st.selectbox("Household Income", ["Low", "Medium", "High"])
-        iron = st.radio("Iron Supplementation?", ["Yes", "No"], horizontal=True)
+    submitted = st.form_submit_button("🔍 Predict Birth Weight")
 
-    submitted = st.form_submit_button("🚀 Predict Birth Weight Category")
 st.markdown("</div>", unsafe_allow_html=True)
 
-# === Handle Submission ===
+# Prediction & Results
 if submitted:
-    with st.spinner("Analyzing maternal health data..."):
-        model, scaler, label_encoder, feature_order = load_assets()
-        input_data = pd.DataFrame([{
-            'age': age,
-            'pre_pregnancy_bmi': pre_pregnancy_bmi,
-            'gestational_age_weeks': gestational_age,
-            'blood_pressure_systolic': systolic,
-            'blood_pressure_diastolic': diastolic,
-            'hemoglobin_level': hemoglobin,
-            'number_of_prenatal_visits': prenatal_visits,
-            'has_diabetes': 1 if diabetes == "Yes" else 0,
-            'has_hypertension': 1 if hypertension == "Yes" else 0,
-            'smoking_status': 1 if smoking == "Yes" else 0,
-            'alcohol_consumption': 1 if alcohol == "Yes" else 0,
-            'education_level': {"None": 0, "Primary": 1, "Secondary": 2, "Tertiary": 3}[education],
-            'household_income': {"Low": 0, "Medium": 1, "High": 2}[income],
-            'iron_supplementation': 1 if iron == "Yes" else 0
-        }])
+    model, scaler, encoder, features = load_assets()
+    df = pd.DataFrame([{
+        'age': age, 'pre_pregnancy_bmi': bmi, 'gestational_age_weeks': ga,
+        'blood_pressure_systolic': sys, 'blood_pressure_diastolic': dia,
+        'hemoglobin_level': hb, 'number_of_prenatal_visits': visits,
+        'has_diabetes': int(diabetes=="Yes"), 'has_hypertension': int(hypertension=="Yes"),
+        'smoking_status': int(smoke=="Yes"), 'alcohol_consumption': int(alcohol=="Yes"),
+        'education_level': ["None","Primary","Secondary","Tertiary"].index(education),
+        'household_income': ["Low","Medium","High"].index(income),
+        'iron_supplementation': int(iron=="Yes")
+    }])
 
-        category, confidence = predict(model, scaler, label_encoder, input_data, feature_order)
+    with st.spinner("Calculating prediction..."):
+        category, confidence = predict(model, scaler, encoder, df, features)
 
     if category:
-        st.success(f"🎯 Predicted Birth Weight Category: **{category}**")
-        st.metric("Confidence Level", f"{confidence:.2f}%")
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.subheader("🎯 Result")
+        st.success(f"Predicted Category: **{category}**")
+        st.metric("Confidence", f"{confidence:.2f}%")
         st.progress(int(confidence))
-        st.markdown(f"""
-        <div style='background-color: #fff7f3; padding: 1em; border-radius: 10px;'>
-            <b>Note:</b> This prediction is a screening tool. For a comprehensive assessment, please consult a qualified medical professional.
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.error("⚠️ Prediction failed. Please review the input data.")
+        st.info("This is a screening tool—consult a healthcare provider for clinical guidance.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-# === Call to Action ===
+        # CTA Buttons
+        cA, cB, cC = st.columns(3)
+        with cA: st.button("💾 Save")
+        with cB: st.button("📤 Share")
+        with cC: st.button("📞 Contact Provider")
+
+# Footer
 st.markdown("---")
-st.subheader("📌 Next Steps")
-colA, colB, colC = st.columns(3)
-with colA:
-    st.button("💾 Save Result")
-with colB:
-    st.button("📤 Share with Doctor")
-with colC:
-    st.button("📞 Seek Guidance")
-
-st.caption("Made with 🧠 and ❤️ | © 2025 MaternAI")
+st.caption("© 2025 MaternAI • Designed for expectant mothers with care 💖")
