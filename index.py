@@ -2,17 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-from PIL import Image
 from sklearn.exceptions import NotFittedError
 
-# --- Streamlit Page Config ---
-st.set_page_config(page_title="MaternAI - Neonatal Risk Predictor", layout="centered", page_icon="🤱")
+# Page setup
+st.set_page_config(page_title="MaternAI - Neonatal Risk Predictor", layout="centered", page_icon="👶")
 
-# --- Custom CSS Styling ---
 st.markdown("""
     <style>
     body {
-        background: linear-gradient(to bottom, #fff0f5, #ffe4e1);
+        background-color: #f7f3f0;
     }
     .main {
         font-family: 'Segoe UI', sans-serif;
@@ -23,63 +21,37 @@ st.markdown("""
         color: white;
         font-weight: bold;
     }
-    .stSelectbox, .stRadio, .stSlider {
-        background-color: #fffdfd;
-        border-radius: 10px;
-    }
-    .card {
-        background-color: white;
-        padding: 1.5em;
-        margin-bottom: 1.2em;
-        border-radius: 15px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-    }
-    .stProgress > div > div {
-        background-color: #8ab6d6;
-    }
-    html, body, [class*="css"] {
-        font-family: 'Segoe UI', sans-serif;
-        font-size: 16px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Header & Image ---
 st.title("🤱 MaternAI: Neonatal Birth Weight Predictor")
-st.markdown("Empowering maternal wellness through data-driven insight.")
-st.image("https://images.unsplash.com/photo-1587049352844-4a9a57bced3f", 
-         caption="Source: Unsplash", 
-         use_column_width=True)
+st.markdown("A maternal health tool to assess the predicted birth weight category of a newborn using medically relevant indicators.")
 
-# --- Sidebar Navigation ---
-with st.sidebar:
-    st.header("📋 Navigation")
-    st.markdown("""
-        - 📝 Fill maternal info  
-        - 🔎 Click 'Predict'  
-        - 📊 View result  
-    """)
-    st.markdown("🔗 [Learn about maternal health](https://www.who.int/health-topics/maternal-health)")
-    st.caption("Made with ❤️ for mothers worldwide.")
-
-# --- Load Model Assets ---
+# Load model assets
 @st.cache_resource
 def load_assets():
     model = joblib.load("model_rf.pkl")
     scaler = joblib.load("scaler.pkl")
     label_encoder = joblib.load("label_encoder.pkl")
     feature_order = [
-        'age', 'pre_pregnancy_bmi', 'gestational_age_weeks',
-        'blood_pressure_systolic', 'blood_pressure_diastolic',
-        'hemoglobin_level', 'number_of_prenatal_visits',
-        'has_diabetes', 'has_hypertension',
-        'smoking_status', 'alcohol_consumption',
-        'education_level', 'household_income',
+        'age',
+        'pre_pregnancy_bmi',
+        'gestational_age_weeks',
+        'blood_pressure_systolic',
+        'blood_pressure_diastolic',
+        'hemoglobin_level',
+        'number_of_prenatal_visits',
+        'has_diabetes',
+        'has_hypertension',
+        'smoking_status',
+        'alcohol_consumption',
+        'education_level',
+        'household_income',
         'iron_supplementation'
     ]
     return model, scaler, label_encoder, feature_order
 
-# --- Predict Function ---
+# Predict
 def predict(model, scaler, label_encoder, input_df, feature_order):
     try:
         input_df = input_df[feature_order]
@@ -95,20 +67,29 @@ def predict(model, scaler, label_encoder, input_df, feature_order):
         st.error(f"Prediction error: {e}")
         return None, None
 
-# --- Tooltips ---
+# Educational tooltips
 tooltips = {
-    "bmi": "Body Mass Index before pregnancy.",
+    "bmi": "Body Mass Index (BMI) before pregnancy.",
     "gestation": "Gestational age in weeks (typically 37–42 weeks).",
-    "bp_sys": "Systolic pressure (top number). Normal: 90–120 mmHg.",
+    "bp_sys": "Systolic pressure (top number). Normal range: 90–120 mmHg.",
     "bp_dia": "Diastolic pressure (bottom number). Normal: 60–80 mmHg.",
     "hb": "Hemoglobin level. Normal: 11–16 g/dl during pregnancy.",
-    "visits": "Recommended at least 8 visits during pregnancy."
+    "visits": "Recommended 8+ visits during pregnancy.",
 }
 
-# --- Input Form ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.subheader("📥 Enter Maternal Health Information")
+# Sidebar Navigation
+with st.sidebar:
+    st.header("📋 Navigation")
+    st.markdown("""
+        - 📝 Fill maternal info
+        - 🔎 Click 'Predict'
+        - 📊 View result
+    """)
+    st.markdown("Designed with ❤️ for maternal wellness.")
+    st.markdown("🔗 [Learn more](https://www.who.int/health-topics/maternal-health)")
 
+# Input Section
+st.subheader("📥 Enter Maternal Health Information")
 with st.form("input_form"):
     col1, col2 = st.columns(2)
 
@@ -131,9 +112,8 @@ with st.form("input_form"):
         iron = st.radio("Iron Supplementation?", ["Yes", "No"], horizontal=True)
 
     submitted = st.form_submit_button("🚀 Predict Birth Weight Category")
-st.markdown("</div>", unsafe_allow_html=True)
 
-# --- On Form Submit ---
+# Submission Logic
 if submitted:
     with st.spinner("Analyzing maternal health data..."):
         model, scaler, label_encoder, feature_order = load_assets()
@@ -163,13 +143,13 @@ if submitted:
         st.progress(int(confidence))
         st.markdown(f"""
         <div style='background-color: #fff7f3; padding: 1em; border-radius: 10px;'>
-            <b>Note:</b> This prediction is a screening tool. Please consult a qualified healthcare provider for clinical decisions.
+            <b>Note:</b> This prediction is a screening tool. For a comprehensive assessment, please consult a qualified medical professional.
         </div>
         """, unsafe_allow_html=True)
     else:
         st.error("⚠️ Prediction failed. Please review the input data.")
 
-# --- Call to Action Section ---
+# Call to Action
 st.markdown("---")
 st.subheader("📌 Next Steps")
 colA, colB, colC = st.columns(3)
