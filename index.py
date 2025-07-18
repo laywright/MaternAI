@@ -149,15 +149,4 @@ if submitted:
     else:
         st.error("⚠️ Prediction failed. Please review the input data.")
 
-# Call to Action
-st.markdown("---")
-st.subheader("📌 Next Steps")
-colA, colB, colC = st.columns(3)
-with colA:
-    st.button("💾 Save Result")
-with colB:
-    st.button("📤 Share with Doctor")
-with colC:
-    st.button("📞 Seek Guidance")
-
 st.caption("Made with 🧠 and 💕 | © 2025 MaternAI")
